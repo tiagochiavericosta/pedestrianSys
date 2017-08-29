@@ -10,13 +10,13 @@ from __future__ import division
 from __future__ import print_function
 import cv2
 import time
-import openface
-import dlib
 import os
+from darkflow.net.build import TFNet
 from camera import CameraSrc
 
 start = time.time()
 img_dims = 96
+
 
 # custom enum class: No enum support in python 2.7
 class SuperEnum(object):
@@ -33,32 +33,50 @@ class SuperEnum(object):
 
 # models : make this accessible to both modules
 class ModelsDir(SuperEnum):
-
-    dlib = "models/dlib"
-    dlibFacePredictor = os.path.join(dlib,
-                                     "shape_predictor_68_face_landmarks.dat")
-    dlib_mean = os.path.join(dlib,"mean.csv")
-    dlib_std = os.path.join(dlib,"std.csv")
-
-    openface = "models/openface"
-    nn_model = os.path.join(openface,
-                            "nn4.small2.v1.t7")
-
-
+    models = "models"
+    labels = "labels"
+    yolo_face_cfg = "yolo-face.cfg"
+    yolo_face_weights = "yolo-face_final.weights"
+    face_label_file = "labels.txt"
+    face_model_cfg = os.path.join(models,yolo_face_cfg)
+    face_model_wgts = os.path.join(models,yolo_face_weights)
+    face_labels = os.path.join(labels, face_label_file)
 
 
 # face detection module constructs
 class faceDetector(object):
 
+    # pass model paths etc as arguments
     def __init__(self):
         """
         Constructor for detection module
         """
         try:
-            self._align = openface.AlignDlib(ModelsDir.dlibFacePredictor)
+            model_path = ModelsDir.face_model_cfg
+            model_weights = ModelsDir.face_model_wgts
+            threshold = 0.1
+            gpu = 0.7
+            labels = ModelsDir.face_labels
 
-        except cv2.error:  # exception must be caught at call
-            raise Exception("Error occured initialising feed connection")
+            print("--Loading ")
+            print(model_path, model_weights)
+
+            options = {
+                "model" : model_path,
+                "load" : model_weights,
+                "threshold" : float(threshold),
+                "gpu" : float(gpu),
+                "labels" : labels,
+            }
+
+            # load model
+            self._tfnet = TFNet(options)
+
+        except Exception:  # exception must be caught at call
+            raise Exception("Error initialising detection module")
+
+    def modelInstance(self):
+        return self._tfnet
 
     def resize_frame(self, frame):
         """
@@ -75,12 +93,16 @@ class faceDetector(object):
             return True
         return False
 
+    # requires revision to use tensorflow framework
     def detect_faces(self, frame):
         """
         - Detect faces in a frame.
         :param frame: image frame
         :return: locations of faces in a list
         """
+        alignedFaces = None
+        bb = None
+
         start = time.time()
 
         # check frame
@@ -94,31 +116,6 @@ class faceDetector(object):
         rgbImg = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
         # bounding boxes
-        bb = self._align.getAllFaceBoundingBoxes(frame)
-
-        if bb is None:
-            return None
-
-        # verbose
-        # print("Detection took {} secs".format(time.time() - start))
-
-        # aligned faces list
-        alignedFaces = []
-
-        # align faces
-        for box in bb:
-            alignedFaces.append(
-                self._align.align(
-                    imgDim=img_dims,
-                    rgbImg=rgbImg,
-                    bb=box,
-                    landmarkIndices=openface.AlignDlib.OUTER_EYES_AND_NOSE
-                )
-            )
-
-        # check alignement state
-        if alignedFaces is None:
-            raise Exception("Alignment Error: failed to align frame")
 
         # verbose
         # print("Alignment tooks {} seconds.".format(time.time() - start))

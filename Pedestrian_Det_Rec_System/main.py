@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python
 
 # imports
 from __future__ import absolute_import
@@ -8,7 +8,7 @@ import cv2
 from camera import CameraSrc
 from detector import faceDetector
 import multiprocessing
-from multiprocessing import Process, Queue, Value, cpu_count, get_logger, Array
+from multiprocessing import Process, Queue, Value, cpu_count, Array
 from timer import Timer
 from threading import Thread
 import argparse
@@ -44,20 +44,23 @@ def detection(quit, det):
         frame = frame_queue.get()
 
         # perform detection
-        alignedFaces, face_locs = det.detect_faces(frame=frame)
 
-        if alignedFaces is not None:
-            # add to aligned faces queue
-            face_aligned_queue.put(alignedFaces)
-            face_coordinates_queue.put(face_locs)
+
+        # put aligned faces and co-ordinates in queue
+
 
 # stream process
 def stream(quit, det):
+    """
+    :param quit: Quit streaming
+    :param det: detection object
+    :return:
+    """
     global sav_frame
     global sav_result
 
     camera_src = None
-    if args.device == 0:  # jetson
+    if args.device == str(0):  # jetson
         camera_src = CameraSrc().get_cam_src()
     else:  # desktop
         camera_src = 0
@@ -81,20 +84,19 @@ def stream(quit, det):
         frame_queue.put(sav_frame)
 
         # display detection results
-        face_locs = face_coordinates_queue.get()
-        alignedFace = face_aligned_queue.get()
+        #face_locs = face_coordinates_queue.get()
+        #alignedFace = face_aligned_queue.get()
 
-        if face_locs is not None:
-            print(len(alignedFace), face_locs)
+        #if face_locs is not None:
+        #    print(len(alignedFace), face_locs)
 
-        det.display(frame=frame, face_locations=face_locs)
+        #det.display(frame=frame, face_locations=face_locs)
 
         cv2.imshow(args.device, frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             quit.value = 1
             break
 
-    #producer.join()
     camera.release()
     cv2.destroyAllWindows()
 
@@ -111,29 +113,33 @@ if __name__ == '__main__':
     result_queue = Queue()
     face_coordinates_queue = Queue()
     face_aligned_queue = Queue()
-    message = Array('c', 'Now Loading...' + (' ' * 20))
+    #message = Array('c', 'Now Loading...' + (' ' * 20))
 
     # init
-    multiprocessing.log_to_stderr()
-    logger = get_logger()
-    logger.setLevel(logging.INFO)
+    #multiprocessing.log_to_stderr()
+    #logger = get_logger()
+    #logger.setLevel(logging.INFO)
 
     # detector
     det = faceDetector()
+
 
     # streaming producer process
     stream_process = Process(
         target=stream, args=(quitSys, det)
     )
-    stream_process.start()
+    # run
+    #stream_process.start()
 
     # detection consumer process
     detection_process = Process(
         target=detection, args=(quitSys, det)
     )
-    detection_process.start()
+    # run
+    #detection_process.start()
 
     t = Timer()
+    """
     # consumer pro-type
     while quitSys.value == 0:
         t.tic()
@@ -143,7 +149,7 @@ if __name__ == '__main__':
 
         t.toc()
         t.clear()
-
+    """
     # exit all processes
     print('-- Exiting --')
     frame_queue.close()
